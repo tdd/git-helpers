@@ -1,0 +1,95 @@
+#!/usr/bin/env ruby
+#
+# Small tool to synchronize unhandled svn:ignore properties, in a repository
+# obtained using `git svn` commands, to produce, or update, `.gitignore`
+# files accordingly.
+#
+# Simply run it from anywhere inside your Git repository.  The script itself
+# can be anywhere.  The entire repository is updated, regardless of the
+# current directory at the time of invocation.
+#
+# Version 0.6 (2010-09-15)
+#
+# Copyright (c) 2010 Christophe Porteneuve <tdd@git-attitude.fr>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+require 'cgi'
+require 'fileutils'
+
+class GitSvnIgnoresMigrator
+  def initialize
+    err_tty, out_tty = STDERR.tty?, STDOUT.tty?
+    @err_prefix = err_tty ? "\033[1;31m" : nil
+    @err_suffix = err_tty ? "\033[0m" : nil
+    setup
+  end
+  
+  def self.run
+    new.run
+  end
+  
+  def run
+    for log in @logs
+      puts "Processing #{log.sub("#{@path}#{File::SEPARATOR}", '')}…"
+      ignores = File.readlines(log).grep(/svn:ignore/).map { |line|
+        segs = line.split(' ')
+        dir = CGI::unescape(segs[1]).sub(%r(^trunk/?), '')
+        dir = '.' if dir.empty?
+        [dir, CGI::unescape(segs[3]).split.map { |s| s.strip }.sort.uniq]
+      }
+      for (dir, patterns) in ignores
+        file = File.join(@path, dir, '.gitignore')
+        if File.file?(file)
+          lines = File.readlines(file)
+          patterns.reject! { |p| lines.include?(p) }
+          marker = patterns.empty? ? '=' : 'M'
+        else
+          FileUtils.mkdir_p(File.dirname(file))
+          lines = []
+          marker = 'C'
+        end
+        puts "  [#{marker}] #{dir}: #{patterns.empty? ? 'Unchanged' : "Adding #{patterns.join(' / ')}"}."
+        lines += patterns
+        lines.sort!
+        File.open(file, 'w') { |f| f.write(lines) }
+      end
+    end
+  end
+  
+private
+  def error(msg, exit_code = nil)
+    STDERR.puts "#{@err_prefix}#{msg}#{@err_suffix}"
+    exit exit_code if exit_code
+  end
+
+  def setup
+    @path = Dir.pwd
+    until '/' == @path || File.directory?(File.join(@path, '.git'))
+      @path = File.dirname(@path)
+    end
+    if '/' == @path
+      error 'Cannot determine a containing Git directory', 1
+    end
+    @logs = Dir[File.join(@path, '.git/svn/refs/**/trunk/unhandled.log')]
+    error('No unhandled-properties log found!', 2) if @logs.empty?
+  end
+end
+
+GitSvnIgnoresMigrator.run if __FILE__ == $0
