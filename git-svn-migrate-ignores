@@ -68,7 +68,7 @@ class GitSvnIgnoresMigrator
         puts "  [#{marker}] #{dir}: #{patterns.empty? ? 'Unchanged' : "Adding #{patterns.join(' / ')}"}."
         lines += patterns
         lines.sort!
-        File.open(file, 'w') { |f| f.write(lines) }
+        File.open(file, 'w') { |f| f.write(lines.join("\n")) }
       end
     end
   end
@@ -87,7 +87,7 @@ private
     if '/' == @path
       error 'Cannot determine a containing Git directory', 1
     end
-    @logs = Dir[File.join(@path, '.git/svn/refs/**/trunk/unhandled.log')]
+    @logs = Dir[File.join(@path, '.git/svn/**/trunk/unhandled.log')]
     error('No unhandled-properties log found!', 2) if @logs.empty?
   end
 end
