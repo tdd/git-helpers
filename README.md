@@ -26,7 +26,7 @@ The scripts
 
 There is currently just one script, but I'll be posting more as I stratch more itches :-)
 
-### `git-svn-migrate-ignores`
+### <tt>git-svn-migrate-ignores</tt>
 
 This is for people who have to deal with remote Subversion repositories.  Git only handles the `svn:executable` property; everything else, most notably `svn:ignore`, is, well… ignored (Git actually says they are "unhandled").
 
